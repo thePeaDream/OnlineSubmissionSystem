@@ -1,24 +1,22 @@
 #pragma once
-#include "../entity/User.hpp"
+#include "../entity/Writer.hpp"
+#include "./UserManage.hpp"
 #include "SQLConnect.hpp"
-class WriterManage
+class WriterManage:public UserManage
 {
 public:
-    WriterManage(MYSQL* con):_con(con){}
+    WriterManage(){}
     ~WriterManage(){};
-    bool insert(const struct Writer& w);
+    bool insert(const string& nickName,const string& userName,const string& password,const string& avatar,const string& phone);
     bool remove(int writerId);
     bool update(const struct Writer& w);
     //根据某个条件查找作者信息
     struct Writer searchByNickName(const string& nickName);
-    struct Writer searchByUserNameAndPassword(const string& userName,const string& password);
     vector<struct Writer> searchAll();
-private:
-    MYSQL* _con;
 };
 
 //先插入到User表中，拿到新插入的id号，再插入到Writer表，一旦出错要回滚
-bool WriterManage::insert(const struct Writer& w)
+bool WriterManage::insert(const string& nickName,const string& userName,const string& password,const string& avatar,const string& phone)
 {
     //开始事务
     if(mysql_query(_con,"START TRANSCATION")){
@@ -27,7 +25,7 @@ bool WriterManage::insert(const struct Writer& w)
     }
     char sql[1024];   
     sprintf(sql,"insert into User (role,nickName,userName,password,avatar,phone) values (%d,'%s','%s','%s','%s',%d)",
-    w._role,w._nickName.c_str(),w._userName.c_str(),w._password.c_str(),w._avatar.c_str(),w._phone.c_str());
+    Role::Writer,nickName.c_str(),userName.c_str(),password.c_str(),avatar.c_str(),phone.c_str());
     //1 插入数据到User表中，出错，事务回滚
     if(mysql_query(_con,sql))
     {
@@ -46,8 +44,8 @@ bool WriterManage::insert(const struct Writer& w)
     }
     MYSQL_ROW row = mysql_fetch_row(result);
     int userId =atoi(row[0]);
-    mysql_free_result(result);
-    //3 插入到Writer 表
+    //mysql_free_result(result);
+    //3 插入到Writer表
     sprintf(sql,"insert into Writer (writerId,manuscriptNumber)",userId,0);
     if(mysql_query(_con,sql))
     {
@@ -112,7 +110,7 @@ bool WriterManage::update(const struct Writer& w)
     return true;
 }
 
-//从视图view_writerUser中查找所有用户信息
+//从视图view_writerUser中查找
 vector<struct Writer> WriterManage::searchAll()
 {
     char sql[1024];
@@ -145,8 +143,7 @@ vector<struct Writer> WriterManage::searchAll()
     }
     return ret;
 }
-
-//返回的作者信息，如果稿件数目为-1表示数据库查询异常或无该作者
+//根据昵称查找用户
 struct Writer WriterManage::searchByNickName(const string& nickName)
 {
     char sql[1024];
@@ -155,7 +152,7 @@ struct Writer WriterManage::searchByNickName(const string& nickName)
     if(mysql_query(_con,sql))
     {
         cerr << mysql_error(_con) <<endl;
-        ret._manuscriptNumber = -1;//查询出错
+        ret._flag =SearchFlag::SQLERROR;//查询出错
         return ret;
     }
     MYSQL_RES* res = mysql_store_result(_con);
@@ -174,38 +171,8 @@ struct Writer WriterManage::searchByNickName(const string& nickName)
         struct Writer w(userId,role,nickName,userName,password,avatar,phone,menuscriptNumber);
         return w;
     }
-    ret._manuscriptNumber = -1;//作者不存在
+    ret._flag = SearchFlag::NONE;//作者不存在
     return ret;
 }
 
-//返回的作者信息，如果稿件数目为-1表示数据库查询异常或无该作者
-struct Writer WriterManage::searchByUserNameAndPassword(const string& userName,const string& password)
-{
-    char sql[1024];
-    struct Writer ret;
-    snprintf(sql,sizeof(sql),"select * from view_writerUser where userName='%s' and password='%s'",userName.c_str(),password.c_str());
-    if(mysql_query(_con,sql))
-    {
-        cerr << mysql_error(_con) <<endl;
-        ret._manuscriptNumber = -1;//查询出错
-        return ret;
-    }
-    MYSQL_RES* res = mysql_store_result(_con);
-    MYSQL_ROW row = mysql_fetch_row(res);
-    if(row = mysql_fetch_row(res))
-    {
-        int userId = atoi(row[0]);
-        Role role = Role(atoi(row[1]));
-        string nickName = row[2];
-        string userName = row[3];
-        string password = row[4];
-        string avatar = row[5];
-        string phone = row[6];
-        int menuscriptNumber = atoi(row[7]);
-        cerr << role << endl << endl;
-        struct Writer w(userId,role,nickName,userName,password,avatar,phone,menuscriptNumber);
-        return w;
-    }
-    ret._manuscriptNumber = -1;//作者不存在
-    return ret;
-}
+

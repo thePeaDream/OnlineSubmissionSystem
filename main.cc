@@ -5,7 +5,7 @@
 #include <signal.h>
 #include "Daemon.hpp"
 
-SQLConnect* sqlConnect;
+SQLConnect sqlConnect = SQLConnect::GetInstance();
 
 static void Usage(char* proc)
 {

@@ -9,7 +9,6 @@
 #include "AssessorService.hpp"
 #include "WriterService.hpp"
 #include "CommonService.hpp"
-
 #include <math.h>
 #include <mutex>
 #include <thread>
@@ -35,7 +34,6 @@ private:
     Sock _sock;
     int _listenSock;
     uint16_t _port;
-
     std::set<string> _code;
     std::mutex _mtx;
 public:
@@ -77,19 +75,13 @@ HttpServer::HttpServer(uint16_t port = 8080)
     }
     // 2 绑定套接字
     _sock.Bind(_listenSock, _port);
-
     // 3 把套接字设置为监听状态，等待连接
     _sock.Listen(_listenSock);
-    //绑定端口后，连接数据库
-    sqlConnect = new SQLConnect();
-    assert(sqlConnect);
 }
 HttpServer::~HttpServer()
 {
     if(_listenSock >= 0)
         close(_listenSock);
-    if(sqlConnect != nullptr)
-        delete sqlConnect;
 }
 void HttpServer::start()
 {
@@ -112,7 +104,6 @@ void HttpServer::start()
 void HttpServer::HandleHttp(int serviceSock)
 {
     cerr << "开始处理Http请求"<<endl;
-
     // 获取整个http请求报文
     string req = GetHttpRequest(serviceSock);
     cerr << "成功获取Http请求全部报文"<<endl;
@@ -139,6 +130,7 @@ void HttpServer::HandleHttp(int serviceSock)
         HandleResponse(res, serviceSock,code);
         cerr << "已经给客户端回应"<<endl;
     }
+    cerr << "本次Http请求处理完成" << endl;
     close(serviceSock);
 }
 void HttpServer::HandleOption(int sock)
@@ -253,78 +245,125 @@ string HttpServer::HandleRequest(const string &url, const string &json, const st
     AdminService adminService;
     WriterService writerService;
     CommonService commonService;
+    
+    Json::Value root;
+    Json::Reader reader;
+    //解析字符串json到root1中
+    reader.parse(json, root);
+
     //通用
+    if(url == "/login")//登录
+    {
+        return commonService.Login(root);
+    }
+    else if(url == "/getPersonalAllInformation")//查看个人全部信息
+    {
+        return commonService.GetPersonalAllInformation(root);
+    }
+    else if(url == "/updatePersonalBaseInformation")//修改/更新个人基本信息
+    {
+        return commonService.UpdatePersonalBaseInformation(root);
+    }
+    else if(url == "/getAllNotice")//查看所有通知
+    {
+        return commonService.GetAllNotice();
+    }
+    else if(url == "/getAllCategory")//获取所有稿件类别名
+    {
+        return commonService.GetAllCategory();
+    }
+    
+    //作者
     if(url == "/register")//注册
     {
-        return commonService.Register(json);
+       return writerService.Register(root);
     }
-    else if(url == "/login")//登录
+    else if(url == "/getAllPersonalManuscript")//查看个人所有稿件
     {
-        return commonService.Login(json);
+        return writerService.GetAllPersonalManuscript(root);
     }
-    else if(url == "/searchPerson")//查看个人信息
+    else if(url == "/submitPersonManuscript")//提交个人稿件
     {
-        return commonService.GetPersonInformation(json);
+        return writerService.SubmitPersonalManuscript(root);
     }
-    else if(url == "/updatePerson")//修改个人信息
+    else if(url == "/removePersonManuscript")//删除个人稿件
     {
-        return commonService.UpdatePerson(json);
+        return writerService.RemovePersonalManuscript(root);
     }
-    else if(url == "/searchNotification")//查看通知列表
+    else if(url == "/getAllPublishManuscript")//查看所有公开的稿件
     {
-        return commonService.GetAllNotification();
+        return writerService.GetAllPublishManuscript(root);
     }
-    //作者
-    if(url == "/historyManuscript")//查看历史稿件
+    else if(url == "/updatePersonalManuscript")//更新/修改个人稿件
     {
-        return writerService.GetAllManuscript(json);
+        return writerService.UpdatePersonalManuscript(root);
     }
-    else if(url == "/submitManuscript")//提交稿件
+
+    //审核员
+    if(url == "/getAuditManuscript")//获取本人所有要审核的稿件
     {
-        return writerService.SubmitManuscript(json);
+        return assessorService.GetAuditManuscript(root);
     }
-    else if(url == "/delManuscript")//删除稿件
+    else if(url == "/setManuscriptStatus")//设置稿件状态,包括稿件评价/稿件状态
     {
-        return writerService.RemoveManuscript(json);
+        return assessorService.SetManuscriptState(root);
     }
-    //审核
-    if(url == "/auditManuscript")//获取所有要审核的稿件
+    else if(url == "/applicationAssessor")//申请成为审稿人
     {
-        return assessorService.GetManuscriptToAudit(json);
+       return assessorService.applicationAssessor(root);
     }
-    else if(url == "/alterManuscript")//修改稿件状态,包括稿件评价 和稿件状态
-    {
-        return assessorService.SetManuscriptState(json);
-    }
+
     //管理员
-    if(url == "/addNotification")// 添加通知
+    if(url == "/addNotice")// 添加通知
     {
-        return adminService.AddNotification(json);
+        return adminService.AddNotice(root);
     }
-    else if(url == "/delNotification")// 删除通知
+    else if(url == "/removeNotice")// 删除通知
     {
-        return adminService.RemoveNotification(json);
+        return adminService.RemoveNotice(root);
     }
-    else if(url == "/delPerson")// 删除用户
+    else if(url == "/updateNotice")//修改通知
     {
-        return adminService.RemovePerson(json);
+        return adminService.UpdateNotice(root);
     }
-    else if(url == "/getAllPerson")// 获取用户列表
+    else if(url == "/getAllWriter")// 获取所有作者信息
     {
-        return adminService.GetAllPerson(json);
+        return adminService.GetAllWriter();
     }
-    else{
-        //服务不存在404
+    else if(url == "/removeWriter")// 手动删除作者
+    {
+        return adminService.RemoveWriter(root);
     }
-    return "";
+    else if(url == "/getAllAssessor")// 获取所有审核员信息
+    {
+        return adminService.GetAllAssessor();
+    }
+    else if(url == "/setAssessorStatus")//修改审核员的申请状态
+    {
+        return adminService.SetAssessorStatus(root);
+    }
+    else if(url == "/removeAssessor")//删除审核员
+    {
+        return adminService.RemoveAssessor(root);
+    }
+    else if(url == "/getAllManuscript")//获取所有稿件
+    {
+        return adminService.GetAllManuscript();
+    }
+    else if(url == "/assignAssessor")//为稿件分配审核员
+    {
+        return adminService.AssignAssessor(root);
+    }
+    //服务不存在 404
+    return "";    
 }
 // 给客户端回复HTTP报文
 void HttpServer::HandleResponse(const string &json, int sock,const string&code)
 {
-    cerr << "开始回复客户端" << sock <<endl;
+    //cerr << "开始回复客户端" << sock <<endl;
     string httpResponse;
     httpResponse += "HTTP/1.1 200 OK\r\n";
-    cerr << "请求行构建完成" << endl;
+    //cerr << "请求行构建完成" << endl;
     httpResponse += "Access-Control-Allow-Origin:*\r\n";
     //指定内容类型json
     httpResponse += "Content-Type:application/json\r\n";
@@ -339,7 +378,7 @@ void HttpServer::HandleResponse(const string &json, int sock,const string&code)
     httpResponse += ("Authorization:"+ code + "\r\n");
     httpResponse += "\r\n";
     httpResponse += json;
-    cerr << "httpResponse构建完成"<<endl;
+    //cerr << "httpResponse构建完成"<<endl;
     ssize_t s = send(sock,httpResponse.c_str(),httpResponse.size(),0);
     if(s > 0)
     {
