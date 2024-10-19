@@ -1,6 +1,6 @@
 -- MySQL dump 10.13  Distrib 8.0.36, for Win64 (x86_64)
 --
--- Host: localhost    Database: onlineSubmitSystem
+-- Host: localhost    Database: OnlineSubmissionSystem
 -- ------------------------------------------------------
 -- Server version	8.0.36
 
@@ -47,10 +47,15 @@ DROP TABLE IF EXISTS `assessor`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `assessor` (
   `assessorId` int NOT NULL COMMENT '审核id',
+  `applicationTime` datetime DEFAULT NULL COMMENT '申请成为审核的时间',
+  `description` varchar(400) DEFAULT NULL COMMENT '个人介绍、资历',
+  `status` enum('Pending','Approve') DEFAULT NULL COMMENT '待审批和通过',
+  `categoryId` int DEFAULT NULL COMMENT '擅长哪一种类别的稿件',
   `pendingAudit` int DEFAULT NULL COMMENT '待审核的稿件数目',
-  `completeAudit` int DEFAULT NULL COMMENT '已审核的稿件数目',
   PRIMARY KEY (`assessorId`),
-  CONSTRAINT `assessor_ibfk_1` FOREIGN KEY (`assessorId`) REFERENCES `user` (`userId`)
+  KEY `categoryId` (`categoryId`),
+  CONSTRAINT `assessor_ibfk_1` FOREIGN KEY (`assessorId`) REFERENCES `user` (`userId`),
+  CONSTRAINT `assessor_ibfk_2` FOREIGN KEY (`categoryId`) REFERENCES `category` (`categoryId`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -64,35 +69,6 @@ LOCK TABLES `assessor` WRITE;
 UNLOCK TABLES;
 
 --
--- Table structure for table `assessorapplicant`
---
-
-DROP TABLE IF EXISTS `assessorapplicant`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `assessorapplicant` (
-  `userId` int DEFAULT NULL COMMENT '用户id，注意此时该用户的角色只能是null',
-  `applicationTime` datetime DEFAULT NULL COMMENT '申请时间',
-  `categoryId` int DEFAULT NULL,
-  `description` varchar(500) DEFAULT NULL COMMENT '个人介绍，有什么资历等',
-  `status` enum('待核实','已批准','被拒绝') DEFAULT NULL COMMENT '设置为拒绝或者已批准，向对方手机发送短信',
-  KEY `userId` (`userId`),
-  KEY `categoryId` (`categoryId`),
-  CONSTRAINT `assessorapplicant_ibfk_1` FOREIGN KEY (`userId`) REFERENCES `user` (`userId`),
-  CONSTRAINT `assessorapplicant_ibfk_2` FOREIGN KEY (`categoryId`) REFERENCES `category` (`categoryId`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `assessorapplicant`
---
-
-LOCK TABLES `assessorapplicant` WRITE;
-/*!40000 ALTER TABLE `assessorapplicant` DISABLE KEYS */;
-/*!40000 ALTER TABLE `assessorapplicant` ENABLE KEYS */;
-UNLOCK TABLES;
-
---
 -- Table structure for table `category`
 --
 
@@ -102,8 +78,8 @@ DROP TABLE IF EXISTS `category`;
 CREATE TABLE `category` (
   `categoryId` int NOT NULL AUTO_INCREMENT,
   `name` varchar(20) DEFAULT NULL COMMENT '分类名',
-  `description` varchar(80) DEFAULT NULL COMMENT '描述',
-  PRIMARY KEY (`categoryId`)
+  PRIMARY KEY (`categoryId`),
+  UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -148,7 +124,7 @@ DROP TABLE IF EXISTS `manuscript`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `manuscript` (
-  `manuscriptId` int NOT NULL,
+  `manuscriptId` int NOT NULL AUTO_INCREMENT COMMENT '稿件id',
   `description` text COMMENT '稿件摘要或描述',
   `submitTime` datetime DEFAULT NULL COMMENT '用户提交稿件的时间',
   `latestTime` datetime DEFAULT NULL COMMENT '最新修改时间',
@@ -157,7 +133,7 @@ CREATE TABLE `manuscript` (
   `path` varchar(500) DEFAULT NULL COMMENT '稿件所在服务器路径',
   `size` int DEFAULT NULL COMMENT '稿件大小',
   `categoryId` int DEFAULT NULL COMMENT '类型Id',
-  `status` enum('已公开','已驳回','审核中') DEFAULT NULL COMMENT '稿件状态',
+  `status` enum('Publish','Rejected','UnderReview') DEFAULT NULL COMMENT '稿件状态—已公开、已驳回、审核中',
   `writerId` int DEFAULT NULL COMMENT '稿件作者',
   `assessorId` int DEFAULT NULL COMMENT '该稿件的审核员',
   PRIMARY KEY (`manuscriptId`),
@@ -187,7 +163,7 @@ UNLOCK TABLES;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `tri_addManuscript` AFTER INSERT ON `manuscript` FOR EACH ROW begin
+/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `tri_submitManuscript` AFTER INSERT ON `manuscript` FOR EACH ROW begin
 	update Writer set manuscriptNumber= manuscriptNumber+1 where writerId=new.writerId;
 end */;;
 DELIMITER ;
@@ -205,7 +181,7 @@ DROP TABLE IF EXISTS `notice`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `notice` (
   `noticeId` int NOT NULL AUTO_INCREMENT,
-  `publishTime` datetime DEFAULT NULL COMMENT '通知发布时间',
+  `publishTime` datetime DEFAULT NULL COMMENT '发布时间',
   `latestTime` datetime DEFAULT NULL COMMENT '最新修改时间',
   `title` varchar(20) DEFAULT NULL COMMENT '通知标题',
   `content` text COMMENT '通知内容',
@@ -255,6 +231,29 @@ LOCK TABLES `user` WRITE;
 UNLOCK TABLES;
 
 --
+-- Temporary view structure for view `view_assessoruser`
+--
+
+DROP TABLE IF EXISTS `view_assessoruser`;
+/*!50001 DROP VIEW IF EXISTS `view_assessoruser`*/;
+SET @saved_cs_client     = @@character_set_client;
+/*!50503 SET character_set_client = utf8mb4 */;
+/*!50001 CREATE VIEW `view_assessoruser` AS SELECT 
+ 1 AS `userId`,
+ 1 AS `role`,
+ 1 AS `nickName`,
+ 1 AS `userName`,
+ 1 AS `password`,
+ 1 AS `avatar`,
+ 1 AS `phone`,
+ 1 AS `applicationTime`,
+ 1 AS `description`,
+ 1 AS `status`,
+ 1 AS `categoryId`,
+ 1 AS `pendingAudit`*/;
+SET character_set_client = @saved_cs_client;
+
+--
 -- Temporary view structure for view `view_writeruser`
 --
 
@@ -281,7 +280,7 @@ DROP TABLE IF EXISTS `writer`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `writer` (
-  `writerId` int NOT NULL COMMENT '作者id',
+  `writerId` int NOT NULL,
   `manuscriptNumber` int DEFAULT NULL COMMENT '稿件数目',
   PRIMARY KEY (`writerId`),
   CONSTRAINT `writer_ibfk_1` FOREIGN KEY (`writerId`) REFERENCES `user` (`userId`)
@@ -296,6 +295,24 @@ LOCK TABLES `writer` WRITE;
 /*!40000 ALTER TABLE `writer` DISABLE KEYS */;
 /*!40000 ALTER TABLE `writer` ENABLE KEYS */;
 UNLOCK TABLES;
+
+--
+-- Final view structure for view `view_assessoruser`
+--
+
+/*!50001 DROP VIEW IF EXISTS `view_assessoruser`*/;
+/*!50001 SET @saved_cs_client          = @@character_set_client */;
+/*!50001 SET @saved_cs_results         = @@character_set_results */;
+/*!50001 SET @saved_col_connection     = @@collation_connection */;
+/*!50001 SET character_set_client      = utf8mb4 */;
+/*!50001 SET character_set_results     = utf8mb4 */;
+/*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
+/*!50001 CREATE ALGORITHM=UNDEFINED */
+/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
+/*!50001 VIEW `view_assessoruser` AS select `user`.`userId` AS `userId`,`user`.`role` AS `role`,`user`.`nickName` AS `nickName`,`user`.`userName` AS `userName`,`user`.`password` AS `password`,`user`.`avatar` AS `avatar`,`user`.`phone` AS `phone`,`assessor`.`applicationTime` AS `applicationTime`,`assessor`.`description` AS `description`,`assessor`.`status` AS `status`,`assessor`.`categoryId` AS `categoryId`,`assessor`.`pendingAudit` AS `pendingAudit` from (`user` join `assessor` on((`user`.`userId` = `assessor`.`assessorId`))) */;
+/*!50001 SET character_set_client      = @saved_cs_client */;
+/*!50001 SET character_set_results     = @saved_cs_results */;
+/*!50001 SET collation_connection      = @saved_col_connection */;
 
 --
 -- Final view structure for view `view_writeruser`
@@ -324,4 +341,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2024-10-17 21:36:40
+-- Dump completed on 2024-10-19 23:27:04
